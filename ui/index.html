@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Packet Analyzer Report Viewer</title>
+  <style>
+    :root {
+      --ink: #17202a;
+      --muted: #657182;
+      --line: #d8dee8;
+      --panel: #ffffff;
+      --page: #f4f7fb;
+      --accent: #1d7a8c;
+      --green: #19764b;
+      --red: #b42318;
+      --amber: #9a6700;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--ink);
+      background: var(--page);
+      letter-spacing: 0;
+    }
+    header {
+      background: #18212f;
+      color: #fff;
+      padding: 26px clamp(18px, 4vw, 46px);
+      border-bottom: 5px solid var(--accent);
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 42px); }
+    header p { margin: 0; color: #cbd5e1; max-width: 900px; line-height: 1.5; }
+    main { padding: 20px clamp(14px, 4vw, 46px) 44px; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      margin-top: 16px;
+    }
+    h2 { margin: 0 0 14px; font-size: 18px; }
+    .loader {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+    input[type="file"], input[type="search"], select, button {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 6px;
+      padding: 7px 10px;
+    }
+    button {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(0.95); }
+    .grid { display: grid; gap: 14px; }
+    .stats { grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 88px;
+    }
+    .stat span { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; font-weight: 700; }
+    .stat strong { display: block; margin-top: 8px; font-size: 26px; }
+    .split { grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr); }
+    @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
+    .bar-row { display: grid; grid-template-columns: 150px 1fr 64px; gap: 12px; align-items: center; margin: 10px 0; }
+    .bar-label { font-weight: 650; overflow-wrap: anywhere; }
+    .bar-track { height: 12px; background: #edf1f6; border-radius: 99px; overflow: hidden; }
+    .bar-fill { height: 100%; background: var(--accent); }
+    .bar-count { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    .table-wrap { max-height: 620px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid var(--line); padding: 10px 8px; text-align: left; vertical-align: top; }
+    th { background: #f7f9fc; color: #354255; position: sticky; top: 0; z-index: 1; }
+    tbody tr:hover { background: #f8fbfd; }
+    .badge { display: inline-block; border-radius: 999px; padding: 4px 9px; font-size: 12px; font-weight: 700; }
+    .good { background: #e8f5ee; color: var(--green); }
+    .bad { background: #fdecec; color: var(--red); }
+    .warn { background: #fff4d6; color: var(--amber); }
+    .neutral { background: #eef1f6; color: #4b5563; }
+    .muted { color: var(--muted); }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Packet Analyzer Report Viewer</h1>
+    <p>Open a JSON report generated with <code>packet_analyzer analyze --json reports/analysis.json</code> to inspect flows, blocked traffic, domains, and application classification in a browser.</p>
+  </header>
+
+  <main>
+    <section>
+      <h2>Load Report</h2>
+      <div class="loader">
+        <input id="file" type="file" accept="application/json,.json">
+        <button id="sample" type="button">Load bundled sample</button>
+        <span id="status" class="muted">Waiting for a report file.</span>
+      </div>
+    </section>
+
+    <div id="dashboard" class="hidden">
+      <div id="stats" class="grid stats"></div>
+
+      <div class="grid split">
+        <section>
+          <h2>Applications</h2>
+          <div id="apps"></div>
+        </section>
+        <section>
+          <h2>Top Domains</h2>
+          <div id="domains"></div>
+        </section>
+      </div>
+
+      <section>
+        <h2>Flows</h2>
+        <div class="toolbar">
+          <input id="search" type="search" placeholder="Search IP, app, domain, reason">
+          <select id="verdict">
+            <option value="">All verdicts</option>
+            <option value="blocked">Blocked</option>
+            <option value="flagged">Flagged</option>
+            <option value="allowed">Allowed</option>
+          </select>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Verdict</th><th>Source</th><th>Destination</th><th>Protocol</th>
+                <th>Application</th><th>Domain</th><th>Packets</th><th>Bytes</th><th>Reason</th>
+              </tr>
+            </thead>
+            <tbody id="flowRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const fileInput = document.getElementById('file');
+    const statusEl = document.getElementById('status');
+    const dashboard = document.getElementById('dashboard');
+    const sampleButton = document.getElementById('sample');
+    const statsEl = document.getElementById('stats');
+    const appsEl = document.getElementById('apps');
+    const domainsEl = document.getElementById('domains');
+    const flowRows = document.getElementById('flowRows');
+    const searchEl = document.getElementById('search');
+    const verdictEl = document.getElementById('verdict');
+
+    let rows = [];
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function stat(label, value) {
+      return `<div class="stat"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+    }
+
+    function aggregate(flows, key) {
+      return flows.reduce((acc, item) => {
+        const value = item[key] || 'Unknown';
+        acc[value] = (acc[value] || 0) + Number(item.packets || 0);
+        return acc;
+      }, {});
+    }
+
+    function renderBars(target, values) {
+      const entries = Object.entries(values).sort((a, b) => b[1] - a[1]);
+      const max = Math.max(1, ...entries.map(([, count]) => count));
+      target.innerHTML = entries.length ? entries.map(([label, count]) => {
+        const width = Math.max(2, (count / max) * 100);
+        return `<div class="bar-row">
+          <div class="bar-label">${escapeHtml(label)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${width.toFixed(1)}%"></div></div>
+          <div class="bar-count">${count}</div>
+        </div>`;
+      }).join('') : '<p class="muted">No data available.</p>';
+    }
+
+    function verdictFor(flow) {
+      if (flow.blocked) return 'blocked';
+      if (flow.indicators && flow.indicators.length) return 'flagged';
+      return 'allowed';
+    }
+
+    function badgeFor(verdict) {
+      if (verdict === 'blocked') return 'bad';
+      if (verdict === 'flagged') return 'warn';
+      return 'good';
+    }
+
+    function renderRows(flows) {
+      flowRows.innerHTML = flows.map(flow => {
+        const verdict = verdictFor(flow);
+        const reasonParts = [];
+        if (flow.block_reason) reasonParts.push(flow.block_reason);
+        if (Array.isArray(flow.indicators)) reasonParts.push(...flow.indicators);
+        const reason = reasonParts.join('; ') || 'No rule hit';
+        const search = [
+          flow.src_ip, flow.src_port, flow.dst_ip, flow.dst_port, flow.protocol,
+          flow.app, flow.domain, reason
+        ].join(' ').toLowerCase();
+        return `<tr data-verdict="${verdict}" data-search="${escapeHtml(search)}">
+          <td><span class="badge ${badgeFor(verdict)}">${verdict}</span></td>
+          <td>${escapeHtml(flow.src_ip)}:${escapeHtml(flow.src_port)}</td>
+          <td>${escapeHtml(flow.dst_ip)}:${escapeHtml(flow.dst_port)}</td>
+          <td>${escapeHtml(flow.protocol)}<br><span class="muted">${escapeHtml(flow.service)}</span></td>
+          <td>${escapeHtml(flow.app)}<br><span class="muted">${escapeHtml(flow.detection_method)}</span></td>
+          <td>${escapeHtml(flow.domain)}</td>
+          <td>${escapeHtml(flow.packets)}</td>
+          <td>${escapeHtml(flow.bytes)}</td>
+          <td>${escapeHtml(reason)}</td>
+        </tr>`;
+      }).join('');
+      rows = Array.from(flowRows.querySelectorAll('tr'));
+      applyFilters();
+    }
+
+    function render(report) {
+      const summary = report.summary || {};
+      const flows = report.flows || [];
+      dashboard.classList.remove('hidden');
+      statsEl.innerHTML = [
+        stat('Packets seen', summary.packets_seen || 0),
+        stat('Flows', summary.flows_seen || flows.length),
+        stat('Forwarded', summary.forwarded_packets || 0),
+        stat('Dropped', summary.dropped_packets || 0),
+        stat('TCP', summary.tcp_packets || 0),
+        stat('UDP', summary.udp_packets || 0)
+      ].join('');
+      renderBars(appsEl, aggregate(flows, 'app'));
+      renderBars(domainsEl, aggregate(flows.filter(f => f.domain), 'domain'));
+      renderRows(flows);
+    }
+
+    function applyFilters() {
+      const query = searchEl.value.trim().toLowerCase();
+      const verdict = verdictEl.value;
+      rows.forEach(row => {
+        const okQuery = !query || row.dataset.search.includes(query);
+        const okVerdict = !verdict || row.dataset.verdict === verdict;
+        row.style.display = okQuery && okVerdict ? '' : 'none';
+      });
+    }
+
+    fileInput.addEventListener('change', async event => {
+      const file = event.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const report = JSON.parse(text);
+        statusEl.textContent = `Loaded ${file.name}`;
+        render(report);
+      } catch (error) {
+        statusEl.textContent = `Could not load report: ${error.message}`;
+      }
+    });
+
+    searchEl.addEventListener('input', applyFilters);
+    verdictEl.addEventListener('change', applyFilters);
+    sampleButton.addEventListener('click', async () => {
+      try {
+        const response = await fetch('sample-report.json');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const report = await response.json();
+        statusEl.textContent = 'Loaded bundled sample report';
+        render(report);
+      } catch (error) {
+        statusEl.textContent = `Could not load bundled sample over this URL: ${error.message}`;
+      }
+    });
+    window.renderPacketReport = render;
+  </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# Packet Analyzer rule file.
+# Lines can use either key=value format or section format.
+
+block_app=YouTube
+block_domain=*.tiktok.com
+block_port=23
+
+[blocked_ips]
+192.168.1.50
