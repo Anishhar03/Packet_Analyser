@@ -1,16 +1,23 @@
-# Build outputs
+# Build outputs and generator files
 build/
+bin/
+out/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
 compile_commands.json
+CTestTestfile.cmake
+Makefile
+cmake_install.cmake
 
-# Generated analysis artifacts
+# Generated analysis reports and capture outputs
 reports/
-*.filtered.pcap
+output.pcap
 filtered.pcap
+*.filtered.pcap
+*output*.pcap
 
-# Native executables and objects
+# Native executables, libraries, and objects
 *.exe
 *.obj
 *.o
@@ -19,9 +26,20 @@ filtered.pcap
 *.dll
 *.so
 *.dylib
+*.out
+packet_analyzer
+dpi_engine
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
 
 # Editor and OS files
 .vscode/
 .idea/
+*.swp
+*.swo
 .DS_Store
 Thumbs.db
+
